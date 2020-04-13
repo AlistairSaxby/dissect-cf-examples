@@ -24,7 +24,6 @@ package uk.ac.ljmu.fet.cs.cloud.examples.autoscaler;
 
 import java.security.InvalidParameterException;
 import java.util.HashMap;
-
 import hu.mta.sztaki.lpds.cloud.simulator.Timed;
 import hu.mta.sztaki.lpds.cloud.simulator.energy.specialized.IaaSEnergyMeter;
 import hu.mta.sztaki.lpds.cloud.simulator.examples.jobhistoryprocessor.DCFJob;
@@ -34,6 +33,7 @@ import hu.mta.sztaki.lpds.cloud.simulator.iaas.IaaSService;
 import hu.mta.sztaki.lpds.cloud.simulator.iaas.PhysicalMachine;
 import hu.mta.sztaki.lpds.cloud.simulator.iaas.pmscheduling.SchedulingDependentMachines;
 import hu.mta.sztaki.lpds.cloud.simulator.iaas.vmscheduling.FirstFitScheduler;
+
 
 /**
  * Simple driver of a job trace's simulation with an auto scaling and clustering
@@ -84,6 +84,8 @@ public class AutoScalingDemo implements TraceExhaustionCallback {
 	 */
 	private final JobArrivalHandler jobhandler;
 
+	private static QueueManager qm;
+	
 	/**
 	 * Callback handler to do finalise the simulation once all jobs have completed.
 	 */
@@ -127,7 +129,7 @@ public class AutoScalingDemo implements TraceExhaustionCallback {
 		// Simple job dispatching mechanism which first prepares the workload
 		Progress progress = new Progress(this);
 		JobLauncher launcher = new FirstFitJobScheduler(vi, progress);
-		QueueManager qm = new QueueManager(launcher);
+		 qm = new QueueManager(launcher);
 		jobhandler = new JobArrivalHandler(FileBasedTraceProducerFactory.getProducerFromFile(traceFileLoc, 0, 1000000,
 				false, nodes * cores, DCFJob.class), launcher, qm, progress);
 		jobhandler.processTrace();
@@ -139,8 +141,18 @@ public class AutoScalingDemo implements TraceExhaustionCallback {
 		}
 		// Collects energy related details in every hour
 		energymeter.startMeter(3600000, true);
+		//IMPORTANT IF YOU WANT TO RUN EITHER YOU NEED TO CHOOSE WHICH ONE TO RUN BY UNCOMMENTING IT
+		ASAutoScalerSolutionQueue.evaluateJobs(nodes); // added this to ensure the calculations occur
+		//ASAutoScalerSolutionJobs.evaluateJobs(nodes); // added this to run the initial calcualtions
 	}
 
+	
+	public static QueueManager getQueue() {
+		return qm;
+	}
+	
+	
+	
 	/**
 	 * Start the simulation and print out the statistics about the performance of
 	 * the scaling and dispatching mechanisms applied in this simulation.
@@ -163,12 +175,22 @@ public class AutoScalingDemo implements TraceExhaustionCallback {
 			totutil += (pm.getTotalProcessed() - preProcessingRecords.get(pm))
 					/ (simuTimespan * pm.getPerTickProcessingPower());
 		}
+		
+		
 		System.out.println("Average utilisation of PMs: " + 100 * totutil / cloud.machines.size() + " %");
 		System.out.println("Total power consumption: " + energymeter.getTotalConsumption() / 1000 / 3600000 + " kWh");
 		System.out.println("Average queue time: " + jobhandler.getAverageQueueTime() + " s");
+		System.out.println("Longest queue time: " + jobhandler.getLongestQueueTime() + " s");
+		System.out.println("Shortest queue time: " + jobhandler.getShortestQueueTime() + " s");
 		System.out.println("Number of virtual appliances registered at the end of the simulation: "
 				+ cloud.repositories.get(0).contents().size());
-	}
+	
+	
+	
+		}
+		
+	
+	
 
 	/**
 	 * Sets up and starts the simulation of an auto-scaled virtual infrastructure
@@ -186,8 +208,11 @@ public class AutoScalingDemo implements TraceExhaustionCallback {
 	 * @param args the CLI arguments
 	 * @throws Exception On any issue this application terminates with a stack trace
 	 */
+	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws Exception {
 		new AutoScalingDemo(Integer.parseInt(args[1]), Integer.parseInt(args[2]), args[0],
 				(Class<? extends VirtualInfrastructure>) Class.forName(args[3])).simulateAndprintStatistics();
 	}
+
+	
 }
